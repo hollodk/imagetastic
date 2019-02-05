@@ -13,8 +13,7 @@
     "require": {
         "php": ">=5.3.3",
         "google/auth": "^1.4",
-        "imagine/imagine": "^1.2",
-        "symfony/http-foundation": "^4.2"
+        "imagine/imagine": "^1.2"
     },
     "autoload": {
         "psr-4": {

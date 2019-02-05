@@ -7,7 +7,6 @@ use Google\Auth\Middleware\AuthTokenMiddleware;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\HandlerStack;
 use Imagine\Filter\Basic\WebOptimization;
-use Symfony\Component\HttpFoundation\File\File;
 
 class Client
 {
@@ -58,10 +57,22 @@ class Client
             $res->mime = $dimentions['mime'];
             $res->ratio = $res->width/$res->height;
 
-            $file = new File($filename);
+            switch ($res->mime) {
+            case 'image/jpeg':
+                $extension = 'jpeg';
+                break;
 
-            $path = $identifier.'.'.$file->guessExtension();
-            $thumbPath .= '.'.$file->guessExtension();
+            case 'image/png':
+                $extension = 'png';
+                break;
+
+            case 'image/gif':
+                $extension = 'gif';
+                break;
+            }
+
+            $path = $identifier.'.'.$extension;
+            $thumbPath .= '.'.$extension;
 
             $gooUrl = 'https://storage.googleapis.com/'.$project.'/';
             $res->originalPath = $gooUrl.$gooPath.'/'.$path;
@@ -71,7 +82,7 @@ class Client
             $imagine = new \Imagine\Gd\Imagine();
 
             $image = $filter->apply(
-                $imagine->open($file->getRealPath())
+                $imagine->open($filename)
                 ->thumbnail(
                     new \Imagine\Image\Box($thumb['width'], $thumb['height']),
                     \Imagine\Image\ImageInterface::THUMBNAIL_OUTBOUND
@@ -79,7 +90,7 @@ class Client
             )
             ;
 
-            switch ($file->getMimeType()) {
+            switch ($res->mime) {
             case 'image/jpeg':
                 $image->save($thumbPath, ['jpeg_quality' => 70]);
 
@@ -97,25 +108,23 @@ class Client
                 break;
 
             default:
-                throw new \Exception('Quality drop for '.$file->getMimeType().' not supported');
+                throw new \Exception('Quality drop for '.$res->mime.' not supported');
             }
-
-            $thumbFile = new File($thumbPath);
 
             $response = $client->request('POST', 'https://www.googleapis.com/upload/storage/v1/b/'.$project.'/o?uploadType=media&name='.$gooPath.'/'.$path, [
                 'headers' => [
-                    'Content-Type' => $file->getMimeType(),
-                    'Content-Length' => $file->getSize(),
+                    'Content-Type' => $res->mime,
+                    'Content-Length' => filesize($filename),
                 ],
-                'body' => file_get_contents($file->getRealPath())
+                'body' => file_get_contents($filename)
             ]);
 
             $response = $client->request('POST', 'https://www.googleapis.com/upload/storage/v1/b/'.$project.'/o?uploadType=media&name='.$gooThumbPath.'/'.$path, [
                 'headers' => [
-                    'Content-Type' => $thumbFile->getMimeType(),
-                    'Content-Length' => $thumbFile->getSize(),
+                    'Content-Type' => $res->mime,
+                    'Content-Length' => filesize($thumbPath),
                 ],
-                'body' => file_get_contents($thumbFile->getRealPath())
+                'body' => file_get_contents($thumbPath)
             ]);
 
             $res->done = true;
