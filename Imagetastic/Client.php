@@ -10,7 +10,16 @@ use Imagine\Filter\Basic\WebOptimization;
 
 class Client
 {
-    public function process($imageUrl, array $thumb, $project)
+    private $key;
+    private $project;
+
+    public function __construct($key, $project)
+    {
+        $this->key = $key;
+        $this->project = $project;
+    }
+
+    public function process($imageUrl, array $thumb)
     {
         try {
             $res = new \StdClass();
@@ -29,7 +38,7 @@ class Client
 
             $sa = new ServiceAccountCredentials(
                 'https://www.googleapis.com/auth/cloud-platform',
-                __DIR__.'/../client.json'
+                $this->key
             );
 
             $middleware = new AuthTokenMiddleware($sa);
@@ -74,7 +83,7 @@ class Client
             $path = $identifier.'.'.$extension;
             $thumbPath .= '.'.$extension;
 
-            $gooUrl = 'https://storage.googleapis.com/'.$project.'/';
+            $gooUrl = 'https://storage.googleapis.com/'.$this->project.'/';
             $res->originalPath = $gooUrl.$gooPath.'/'.$path;
             $res->thumbPath = $gooUrl.$gooThumbPath.'/'.$path;
 
@@ -111,7 +120,7 @@ class Client
                 throw new \Exception('Quality drop for '.$res->mime.' not supported');
             }
 
-            $response = $client->request('POST', 'https://www.googleapis.com/upload/storage/v1/b/'.$project.'/o?uploadType=media&name='.$gooPath.'/'.$path, [
+            $response = $client->request('POST', 'https://www.googleapis.com/upload/storage/v1/b/'.$this->project.'/o?uploadType=media&name='.$gooPath.'/'.$path, [
                 'headers' => [
                     'Content-Type' => $res->mime,
                     'Content-Length' => filesize($filename),
@@ -119,7 +128,7 @@ class Client
                 'body' => file_get_contents($filename)
             ]);
 
-            $response = $client->request('POST', 'https://www.googleapis.com/upload/storage/v1/b/'.$project.'/o?uploadType=media&name='.$gooThumbPath.'/'.$path, [
+            $response = $client->request('POST', 'https://www.googleapis.com/upload/storage/v1/b/'.$this->project.'/o?uploadType=media&name='.$gooThumbPath.'/'.$path, [
                 'headers' => [
                     'Content-Type' => $res->mime,
                     'Content-Length' => filesize($thumbPath),
@@ -151,7 +160,7 @@ class Client
     {
         foreach ($files as $file) {
             if (file_exists($file)) {
-                unlink($file->getRealPath());
+                unlink($file);
             }
         }
     }
