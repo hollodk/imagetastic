@@ -147,10 +147,12 @@ class Client
         return $res;
     }
 
-    private function cleanup($file)
+    private function cleanup($files)
     {
-        if (file_exists($file)) {
-            unlink($file->getRealPath());
+        foreach ($files as $file) {
+            if (file_exists($file)) {
+                unlink($file->getRealPath());
+            }
         }
     }
 }
