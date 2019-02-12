@@ -1,7 +1,18 @@
 imagetastic
 =============
 
-This is a very easy toolkit to upload images to google cloud storage including a thumbnail.
+> This is a very easy toolkit to upload images to google cloud storage including a thumbnail.
+
+[![Build Status](https://img.shields.io/travis/hollodk/imagetastic.svg?style=flat)](https://travis-ci.org/hollodk/imagetastic)
+[![Scrutinizer Quality Score](https://img.shields.io/scrutinizer/g/hollodk/imagetastic.svg?style=flat)](https://scrutinizer-ci.com/g/hollodk/imagetastic/)
+[![Scrutinizer Code Intelligence](https://scrutinizer-ci.com/g/hollodk/imagetastic/badges/code-intelligence.svg)](https://scrutinizer-ci.com/g/hollodk/imagetastic/)
+
+[![Latest Release](https://img.shields.io/packagist/v/mh/imagetastic.svg)](https://packagist.org/packages/mh/imagetastic)
+[![MIT License](https://img.shields.io/packagist/l/mh/imagetastic.svg)](http://opensource.org/licenses/MIT)
+[![Total Downloads](https://img.shields.io/packagist/dt/mh/imagetastic.svg)](https://packagist.org/packages/mh/imagetastic)
+
+Developed by [Michael Holm](http://hollo.dk)
+
 
 ```
 <?php
