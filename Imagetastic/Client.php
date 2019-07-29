@@ -31,29 +31,12 @@ class Client
             $filename = tempnam('/tmp', 'mh-');
             $thumbPath = tempnam('/tmp', 'mh-thumb-');
 
+            $this->download($imageUrl, $filename);
+
             $identifier = uniqid();
 
             $gooPath = 'original';
             $gooThumbPath = sprintf('thumb_%sx%s', $thumb['width'], $thumb['height']);
-
-            $sa = new ServiceAccountCredentials(
-                'https://www.googleapis.com/auth/cloud-platform',
-                $this->key
-            );
-
-            $middleware = new AuthTokenMiddleware($sa);
-            $stack = HandlerStack::create();
-            $stack->push($middleware);
-
-            $client = new HttpClient([
-                'handler' => $stack,
-                'auth' => 'google_auth'
-            ]);
-
-            $httpClient = new HttpClient();
-            $response = $httpClient->request('GET', $imageUrl);
-
-            file_put_contents($filename, $response->getBody()->getContents());
 
             $dimentions = @getimagesize($filename);
 
@@ -82,10 +65,6 @@ class Client
 
             $path = $identifier.'.'.$extension;
             $thumbPath .= '.'.$extension;
-
-            $gooUrl = 'https://storage.googleapis.com/'.$this->project.'/';
-            $res->originalPath = $gooUrl.$gooPath.'/'.$path;
-            $res->thumbPath = $gooUrl.$gooThumbPath.'/'.$path;
 
             $filter = new WebOptimization();
             $imagine = new \Imagine\Gd\Imagine();
@@ -120,21 +99,11 @@ class Client
                 throw new \Exception('Quality drop for '.$res->mime.' not supported');
             }
 
-            $response = $client->request('POST', 'https://www.googleapis.com/upload/storage/v1/b/'.$this->project.'/o?uploadType=media&name='.$gooPath.'/'.$path, [
-                'headers' => [
-                    'Content-Type' => $res->mime,
-                    'Content-Length' => filesize($filename),
-                ],
-                'body' => file_get_contents($filename)
-            ]);
+            $r = $this->upload($filename, $gooPath, $path, $res->mime);
+            $res->originalPath = $r->public_link;
 
-            $response = $client->request('POST', 'https://www.googleapis.com/upload/storage/v1/b/'.$this->project.'/o?uploadType=media&name='.$gooThumbPath.'/'.$path, [
-                'headers' => [
-                    'Content-Type' => $res->mime,
-                    'Content-Length' => filesize($thumbPath),
-                ],
-                'body' => file_get_contents($thumbPath)
-            ]);
+            $r = $this->upload($thumbPath, $gooThumbPath, $path, $res->mime);
+            $res->thumbPath = $r->public_link;
 
             $res->done = true;
 
@@ -156,6 +125,70 @@ class Client
         return $res;
     }
 
+    public function download($url, $filename)
+    {
+        $httpClient = new HttpClient();
+        $response = $httpClient->request('GET', $url);
+
+        file_put_contents($filename, $response->getBody()->getContents());
+    }
+
+    public function delete($object)
+    {
+        $client = $this->getClient();
+
+        $url = sprintf('https://www.googleapis.com/storage/v1/b/%s/o/%s',
+            $this->project,
+            urlencode($object)
+        );
+
+        $response = $client->request('DELETE', $url);
+
+        return json_decode($response->getBody()->getContents());
+    }
+
+    public function list()
+    {
+        $client = $this->getClient();
+
+        $url = sprintf('https://www.googleapis.com/storage/v1/b/%s/o',
+            $this->project
+        );
+
+        $response = $client->request('GET', $url);
+
+        return json_decode($response->getBody()->getContents());
+    }
+
+    public function upload($localFile, $path, $filename, $mime)
+    {
+        $client = $this->getClient();
+
+        $destination = $path.'/'.$filename;
+
+        $gooUrl = 'https://storage.googleapis.com/'.$this->project.'/';
+        $publicLink = $gooUrl.$destination;
+
+        $url = sprintf('https://www.googleapis.com/upload/storage/v1/b/%s/o?uploadType=media&name=%s',
+            $this->project,
+            urlencode($destination)
+        );
+
+        $response = $client->request('POST', $url, [
+            'headers' => [
+                'Content-Type' => $mime,
+                'Content-Length' => filesize($localFile),
+            ],
+            'body' => file_get_contents($localFile)
+        ]);
+
+        $o = new \StdClass();
+        $o->public_link = $publicLink;
+        $o->response = json_decode($response->getBody()->getContents());
+
+        return $o;
+    }
+
     private function cleanup($files)
     {
         foreach ($files as $file) {
@@ -163,5 +196,22 @@ class Client
                 unlink($file);
             }
         }
+    }
+
+    private function getClient()
+    {
+        $sa = new ServiceAccountCredentials(
+            'https://www.googleapis.com/auth/cloud-platform',
+            $this->key
+        );
+
+        $middleware = new AuthTokenMiddleware($sa);
+        $stack = HandlerStack::create();
+        $stack->push($middleware);
+
+        return new HttpClient([
+            'handler' => $stack,
+            'auth' => 'google_auth'
+        ]);
     }
 }

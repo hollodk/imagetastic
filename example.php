@@ -13,5 +13,18 @@ $dimentions = [
 
 $client = new Client(__DIR__.'/client.json', $project);
 
+/*
+$list = $client->list();
+if (isset($list->items)) {
+    foreach ($list->items as $item) {
+        dump('found and deleting '.$item->name);
+
+        $r = $client->delete($item->name);
+    }
+
+    die();
+}
+ */
+
 $r = $client->process($imageUrl, $dimentions);
 var_dump($r);

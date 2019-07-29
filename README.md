@@ -13,6 +13,8 @@ imagetastic
 
 Developed by [Michael Holm](http://hollo.dk)
 
+Google Api: https://cloud.google.com/storage/docs/json_api/v1/
+
 
 ```
 <?php
