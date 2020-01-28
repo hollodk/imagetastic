@@ -27,6 +27,7 @@ require_once(__DIR__.'/vendor/autoload.php');
 $project = 'alien-dispatch-8258';
 
 // original picture you want to upload and create thumbnail
+//$imageUrl = '/tmp/my-image-file.jpg';
 $imageUrl = 'https://images.pexels.com/photos/974229/pexels-photo-974229.jpeg?auto=compress&cs=tinysrgb&h=800&w=1200';
 
 // dimentions for the thumbnail
