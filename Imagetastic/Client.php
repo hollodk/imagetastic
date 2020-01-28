@@ -127,10 +127,15 @@ class Client
 
     public function download($url, $filename)
     {
-        $httpClient = new HttpClient();
-        $response = $httpClient->request('GET', $url);
+        if (preg_match("/http:\/\//", $url)) {
+            $httpClient = new HttpClient();
+            $response = $httpClient->request('GET', $url);
 
-        file_put_contents($filename, $response->getBody()->getContents());
+            file_put_contents($filename, $response->getBody()->getContents());
+
+        } else {
+            file_put_contents($filename, file_get_contents($url));
+        }
     }
 
     public function delete($object)
