@@ -2,6 +2,7 @@
 
 namespace Imagetastic;
 
+use Imagetastic\Exception\MyException;
 use Google\Auth\Credentials\ServiceAccountCredentials;
 use Google\Auth\Middleware\AuthTokenMiddleware;
 use GuzzleHttp\Client as HttpClient;
@@ -19,8 +20,15 @@ class Client
         $this->project = $project;
     }
 
-    public function process($imageUrl, array $thumb)
+    /**
+     * local can be file or url
+     * sizes is an array with dimentions
+     */
+    public function process($local, array $thumbs, $cleanup=false)
     {
+        $filename = tempnam('/tmp', 'mh-');
+        $thumb = null;
+
         try {
             $res = new \StdClass();
             $res->height = null;
@@ -28,51 +36,90 @@ class Client
             $res->ratio = null;
             $res->done = false;
 
-            $filename = tempnam('/tmp', 'mh-');
-            $thumbPath = tempnam('/tmp', 'mh-thumb-');
-
-            $this->download($imageUrl, $filename);
-
-            $identifier = uniqid();
+            $this->download($local, $filename);
 
             $gooPath = 'original';
-            $gooThumbPath = sprintf('thumb_%sx%s', $thumb['width'], $thumb['height']);
 
-            $dimentions = @getimagesize($filename);
+            $dimensions = @getimagesize($filename);
 
-            if (!$dimentions) {
-                throw new \Exception('Image cannot be read properly');
-            }
+            if (!$dimensions) throw new MyException('Image cannot be read properly');
 
-            $res->height = $dimentions[1];
-            $res->width = $dimentions[0];
-            $res->mime = $dimentions['mime'];
+            $res->height = $dimensions[1];
+            $res->width = $dimensions[0];
+            $res->mime = $dimensions['mime'];
             $res->ratio = $res->width/$res->height;
 
-            switch ($res->mime) {
-            case 'image/jpeg':
-                $extension = 'jpeg';
-                break;
+            $res->path = sprintf('%s.%s',
+                uuid_create(UUID_TYPE_RANDOM),
+                $this->getExtension($res->mime)
+            );
 
-            case 'image/png':
-                $extension = 'png';
-                break;
+            $r = $this->upload($filename, $gooPath, $res->path, $res->mime);
 
-            case 'image/gif':
-                $extension = 'gif';
-                break;
+            $res->google_meta = $r;
+            $res->public_link = $r->public_link;
+            $res->thumbnails = [];
+
+            foreach ($thumbs as $size) {
+                $thumb = $this->thumb($filename, $size);
+                $gooThumbPath = sprintf('thumb_%sx%s', $size['width'], $size['height']);
+
+                $r = $this->upload($thumb->thumbPath, $gooThumbPath, $res->path, $thumb->mime);
+                $r->width = $thumb->width;
+                $r->height = $thumb->height;
+                $r->public_link = $r->public_link;
+
+                $res->thumbnails[] = $r;
             }
 
-            $path = $identifier.'.'.$extension;
+            $res->done = true;
+
+        } catch (\Imagine\Exception\RuntimeException $e) {
+            $res->error = $e->getMessage();
+
+        } catch (\GuzzleHttp\Exception\ServerException $e) {
+            $res->error = $e->getMessage();
+
+        } catch (MyException $e) {
+            $res->error = $e->getMessage();
+        }
+
+        if ($cleanup) {
+            $this->cleanup([
+                $filename,
+                $thumb->thumbPath,
+            ]);
+        }
+
+        return $res;
+    }
+
+    public function thumb($original, array $size)
+    {
+        try {
+            $res = new \StdClass();
+            $res->done = false;
+            $res->width = $size['width'];
+            $res->height = $size['height'];
+
+            $thumbPath = tempnam('/tmp', 'mh-thumb-');
+
+            $dimensions = @getimagesize($original);
+
+            if (!$dimensions) throw new MyException('Image cannot be read properly');
+
+            $res->mime = $dimensions['mime'];
+
+            $extension = $this->getExtension($res->mime);
             $thumbPath .= '.'.$extension;
 
             $filter = new WebOptimization();
             $imagine = new \Imagine\Gd\Imagine();
 
             $image = $filter->apply(
-                $imagine->open($filename)
+                $imagine->open($original)
                 ->thumbnail(
-                    new \Imagine\Image\Box($thumb['width'], $thumb['height']),
+                    new \Imagine\Image\Box($size['width'], $size['height']),
                     \Imagine\Image\ImageInterface::THUMBNAIL_OUTBOUND
                 )
             )
@@ -82,7 +129,6 @@ class Client
             case 'image/jpeg':
                 $image->save($thumbPath, ['jpeg_quality' => 70]);
 
-                exec('jpegoptim '. $filename);
                 exec('jpegoptim '. $thumbPath);
 
                 break;
@@ -96,15 +142,11 @@ class Client
                 break;
 
             default:
-                throw new \Exception('Quality drop for '.$res->mime.' not supported');
+                throw new MyException('Quality drop for '.$res->mime.' not supported');
             }
 
-            $r = $this->upload($filename, $gooPath, $path, $res->mime);
-            $res->originalPath = $r->public_link;
-
-            $r = $this->upload($thumbPath, $gooThumbPath, $path, $res->mime);
-            $res->thumbPath = $r->public_link;
-
+            $res->original = $original;
+            $res->thumbPath = $thumbPath;
             $res->done = true;
 
         } catch (\Imagine\Exception\RuntimeException $e) {
@@ -113,16 +155,32 @@ class Client
         } catch (\GuzzleHttp\Exception\ServerException $e) {
             $res->error = $e->getMessage();
 
-        } catch (\Exception $e) {
+        } catch (MyException $e) {
             $res->error = $e->getMessage();
         }
 
-        $this->cleanup([
-            $filename,
-            $thumbPath,
-        ]);
-
         return $res;
+    }
+
+    private function getExtension($mime)
+    {
+        $extension = null;
+
+        switch ($mime) {
+        case 'image/jpeg':
+            $extension = 'jpeg';
+            break;
+
+        case 'image/png':
+            $extension = 'png';
+            break;
+
+        case 'image/gif':
+            $extension = 'gif';
+            break;
+        }
+
+        return $extension;
     }
 
     public function download($url, $filename)
@@ -136,6 +194,8 @@ class Client
         } else {
             file_put_contents($filename, file_get_contents($url));
         }
+
+        return file_get_contents($filename);
     }
 
     public function delete($object)
