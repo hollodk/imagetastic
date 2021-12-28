@@ -2,7 +2,6 @@
 
 namespace Imagetastic;
 
-use Imagetastic\Exception\MyException;
 use Google\Auth\Credentials\ServiceAccountCredentials;
 use Google\Auth\Middleware\AuthTokenMiddleware;
 use GuzzleHttp\Client as HttpClient;
@@ -13,11 +12,13 @@ class Client
 {
     private $key;
     private $project;
+    private $prefix;
 
-    public function __construct($key, $project)
+    public function __construct($key=null, $project=null, $prefix=null)
     {
         $this->key = $key;
         $this->project = $project;
+        $this->prefix = $prefix;
     }
 
     /**
@@ -38,11 +39,11 @@ class Client
 
             $this->download($local, $filename);
 
-            $gooPath = 'original';
+            $gooPath = sprintf('%s%s', $this->prefix, 'original');
 
             $dimensions = @getimagesize($filename);
 
-            if (!$dimensions) throw new MyException('Image cannot be read properly');
+            if (!$dimensions) throw new \Exception('Image cannot be read properly');
 
             $res->height = $dimensions[1];
             $res->width = $dimensions[0];
@@ -62,7 +63,7 @@ class Client
 
             foreach ($thumbs as $size) {
                 $thumb = $this->thumb($filename, $size);
-                $gooThumbPath = sprintf('thumb_%sx%s', $size['width'], $size['height']);
+                $gooThumbPath = sprintf('%sthumb_%sx%s', $this->prefix, $size['width'], $size['height']);
 
                 $r = $this->upload($thumb->thumbPath, $gooThumbPath, $res->path, $thumb->mime);
                 $r->width = $thumb->width;
@@ -80,7 +81,7 @@ class Client
         } catch (\GuzzleHttp\Exception\ServerException $e) {
             $res->error = $e->getMessage();
 
-        } catch (MyException $e) {
+        } catch (\Exception $e) {
             $res->error = $e->getMessage();
         }
 
@@ -106,7 +107,7 @@ class Client
 
             $dimensions = @getimagesize($original);
 
-            if (!$dimensions) throw new MyException('Image cannot be read properly');
+            if (!$dimensions) throw new \Exception('Image cannot be read properly');
 
             $res->mime = $dimensions['mime'];
 
@@ -142,7 +143,7 @@ class Client
                 break;
 
             default:
-                throw new MyException('Quality drop for '.$res->mime.' not supported');
+                throw new \Exception('Quality drop for '.$res->mime.' not supported');
             }
 
             $res->original = $original;
@@ -155,7 +156,7 @@ class Client
         } catch (\GuzzleHttp\Exception\ServerException $e) {
             $res->error = $e->getMessage();
 
-        } catch (MyException $e) {
+        } catch (\Exception $e) {
             $res->error = $e->getMessage();
         }
 
